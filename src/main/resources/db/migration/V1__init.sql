@@ -74,10 +74,10 @@ CREATE OR REPLACE FUNCTION reserve_seats(
 DECLARE
     rows_updated INTEGER;
 BEGIN
-    -- Conditional UPDATE: only update if ALL seats are available
+    -- Conditional UPDATE: only update if seats are available OR hold has expired
     -- Returns number of seats actually updated (should be array length if successful)
     UPDATE seats
-    SET 
+    SET
         status = 'held',
         held_by = p_user_id,
         held_until = p_held_until,
@@ -85,7 +85,7 @@ BEGIN
         updated_at = CURRENT_TIMESTAMP
     WHERE show_id = p_show_id
       AND seat_label = ANY(p_seat_labels)
-      AND status = 'available';
+      AND (status = 'available' OR (status = 'held' AND held_until < CURRENT_TIMESTAMP));
     
     GET DIAGNOSTICS rows_updated = ROW_COUNT;
     RETURN rows_updated;
