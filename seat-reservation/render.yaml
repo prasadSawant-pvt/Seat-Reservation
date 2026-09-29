@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: seat-reservation
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health/readiness
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: seat-reservation-db
+          property: connectionString
+      - key: DB_USERNAME
+        fromDatabase:
+          name: seat-reservation-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: seat-reservation-db
+          property: password
+
+databases:
+  - name: seat-reservation-db
+    databaseName: seat_reservation
+    user: seat_reservation_user
+    plan: free
