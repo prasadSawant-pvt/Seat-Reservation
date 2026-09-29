@@ -1,0 +1,188 @@
+{
+	"info": {
+		"_postman_id": "b50d1d84-5020-454b-8c7a-450e61d42c10",
+		"name": "Seat-Reservation-Prod",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "36489471"
+	},
+	"item": [
+		{
+			"name": "liveness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/actuator/health/liveness",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"actuator",
+						"health",
+						"liveness"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "readiness",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/actuator/health/readiness",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"actuator",
+						"health",
+						"readiness"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "shows",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"name\": \"Avengers: Secret Wars - 9:30 PM - Screen 1\",\r\n  \"seats\": [\r\n    \"A1\", \"A2\", \"A3\", \"A4\", \"A5\", \"A6\", \"A7\", \"A8\", \"A9\", \"A10\",\r\n    \"B1\", \"B2\", \"B3\", \"B4\", \"B5\", \"B6\", \"B7\", \"B8\", \"B9\", \"B10\",\r\n    \"C1\", \"C2\", \"C3\", \"C4\", \"C5\", \"C6\", \"C7\", \"C8\", \"C9\", \"C10\",\r\n    \"D1\", \"D2\", \"D3\", \"D4\", \"D5\", \"D6\", \"D7\", \"D8\", \"D9\", \"D10\",\r\n    \"E1\", \"E2\", \"E3\", \"E4\", \"E5\", \"E6\", \"E7\", \"E8\", \"E9\", \"E10\",\r\n    \"F1\", \"F2\", \"F3\", \"F4\", \"F5\", \"F6\", \"F7\", \"F8\", \"F9\", \"F10\",\r\n    \"G1\", \"G2\", \"G3\", \"G4\", \"G5\", \"G6\", \"G7\", \"G8\", \"G9\", \"G10\",\r\n    \"H1\", \"H2\", \"H3\", \"H4\", \"H5\", \"H6\", \"H7\", \"H8\", \"H9\", \"H10\"\r\n  ],\r\n  \"price_paise\": 35000\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/shows",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"shows"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "shows by id",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/shows/040a1e3e-dee8-411a-a2be-debf68b73662",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"shows",
+						"040a1e3e-dee8-411a-a2be-debf68b73662"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "reserve",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTUxMjMwMDAiLCJpYXQiOjE3OTA3MTM2NTYsImV4cCI6MTc5MDgwMDA1Nn0.EojojpEe9fWOiAEtDbyG4TmaCVy105H-yvCnhW2qRP_cunVa1SQfFXLX-p_Rq039"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"seats\": [\"A1\"],\n    \"idempotency_key\": \"unique-key-1234\"\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/shows/040a1e3e-dee8-411a-a2be-debf68b73662/reserve",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"shows",
+						"040a1e3e-dee8-411a-a2be-debf68b73662",
+						"reserve"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "auth/token",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"user_id\": \"550e8400-e29b-41d4-a716-446655123000\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://seat-reservation-dfr6.onrender.com/auth/token",
+					"protocol": "https",
+					"host": [
+						"seat-reservation-dfr6",
+						"onrender",
+						"com"
+					],
+					"path": [
+						"auth",
+						"token"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
