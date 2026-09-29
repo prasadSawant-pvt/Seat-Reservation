@@ -6,6 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /actuator/health/readiness
     autoDeploy: false
+    numInstances: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
