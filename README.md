@@ -26,6 +26,12 @@ Or run from IntelliJ with VM options: `-Duser.timezone=Asia/Kolkata`
 - Readiness: http://localhost:8080/actuator/health/readiness
 - Prometheus: http://localhost:8080/actuator/prometheus
 
+### API Documentation (Swagger UI)
+- **Local**: http://localhost:8080/swagger-ui/index.html
+- **Production**: https://seat-reservation-dfr6.onrender.com/swagger-ui/index.html
+
+Swagger UI provides interactive API documentation with the ability to test endpoints directly from the browser.
+
 ## Deployment
 
 ### Render Deployment
@@ -56,7 +62,7 @@ The application uses the following environment variables (configured automatical
 - Cold start is configured to fail closed if database is unavailable
 
 #### Live URL
-**Live URL: [To be added after deployment]**
+**Live URL: https://seat-reservation-dfr6.onrender.com**
 
 ### Burst Testing
 
@@ -71,12 +77,14 @@ chmod +x burst.sh
 .\burst.ps1 http://localhost:8080
 ```
 
-For a deployed instance:
+For a deployed instance (use HTTPS without port):
 ```bash
-./burst.sh https://your-app-url.onrender.com
+./burst.sh https://seat-reservation-dfr6.onrender.com
 # or on Windows:
-.\burst.ps1 https://your-app-url.onrender.com
+.\burst.ps1 https://seat-reservation-dfr6.onrender.com
 ```
+
+**Note:** Render uses HTTPS on port 443. Do not include :8080 in the URL for deployed instances.
 
 The script performs:
 1. Health check

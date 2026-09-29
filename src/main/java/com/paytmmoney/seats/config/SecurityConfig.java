@@ -28,6 +28,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/shows/**").permitAll()
                 .requestMatchers("/auth/token").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic.disable())

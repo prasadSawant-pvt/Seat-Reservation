@@ -37,7 +37,7 @@ public class AuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
 
         // Skip auth for public endpoints
-        if (path.equals("/shows") || path.matches("/shows/[^/]+") || path.equals("/auth/token") || path.startsWith("/actuator")) {
+        if (path.equals("/shows") || path.matches("/shows/[^/]+") || path.equals("/auth/token") || path.startsWith("/actuator") || path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.startsWith("/swagger-resources")) {
             filterChain.doFilter(request, response);
             return;
         }
