@@ -27,6 +27,7 @@ public class SecurityConfig {
                 .requestMatchers("/shows").permitAll()
                 .requestMatchers(HttpMethod.GET, "/shows/**").permitAll()
                 .requestMatchers("/auth/token").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic.disable())
