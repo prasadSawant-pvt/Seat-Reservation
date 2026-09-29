@@ -12,11 +12,6 @@ public class ReservationSeat {
     @EmbeddedId
     private ReservationSeatId id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("reservationId")
-    @JoinColumn(name = "reservation_id", insertable = false, updatable = false)
-    private Reservation reservation;
-
     public ReservationSeat() {
     }
 
@@ -30,13 +25,5 @@ public class ReservationSeat {
 
     public void setId(ReservationSeatId id) {
         this.id = id;
-    }
-
-    public Reservation getReservation() {
-        return reservation;
-    }
-
-    public void setReservation(Reservation reservation) {
-        this.reservation = reservation;
     }
 }

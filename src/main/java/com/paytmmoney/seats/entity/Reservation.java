@@ -11,6 +11,7 @@ import java.util.UUID;
 public class Reservation {
 
     public enum Status {
+        held,
         confirmed,
         cancelled
     }
@@ -23,7 +24,7 @@ public class Reservation {
     private UUID showId;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private UUID userId;
 
     @Column(name = "amount_paise", nullable = false)
     private Long amountPaise;
@@ -35,13 +36,10 @@ public class Reservation {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<ReservationSeat> reservationSeats = new HashSet<>();
-
     public Reservation() {
     }
 
-    public Reservation(UUID showId, String userId, Long amountPaise) {
+    public Reservation(UUID showId, UUID userId, Long amountPaise) {
         this.showId = showId;
         this.userId = userId;
         this.amountPaise = amountPaise;
@@ -63,11 +61,11 @@ public class Reservation {
         this.showId = showId;
     }
 
-    public String getUserId() {
+    public UUID getUserId() {
         return userId;
     }
 
-    public void setUserId(String userId) {
+    public void setUserId(UUID userId) {
         this.userId = userId;
     }
 
@@ -93,13 +91,5 @@ public class Reservation {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
-    }
-
-    public Set<ReservationSeat> getReservationSeats() {
-        return reservationSeats;
-    }
-
-    public void setReservationSeats(Set<ReservationSeat> reservationSeats) {
-        this.reservationSeats = reservationSeats;
     }
 }

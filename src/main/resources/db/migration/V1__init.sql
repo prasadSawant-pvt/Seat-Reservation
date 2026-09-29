@@ -30,7 +30,7 @@ CREATE TABLE reservations (
     show_id UUID NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
     user_id UUID NOT NULL,
     amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
-    status VARCHAR(20) NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
+    status VARCHAR(20) NOT NULL DEFAULT 'held' CHECK (status IN ('held', 'confirmed', 'cancelled')),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

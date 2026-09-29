@@ -14,7 +14,7 @@ public class IdempotencyKey {
     private String key;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private UUID userId;
 
     @Column(name = "show_id", nullable = false)
     private UUID showId;
@@ -31,7 +31,7 @@ public class IdempotencyKey {
     public IdempotencyKey() {
     }
 
-    public IdempotencyKey(String key, String userId, UUID showId) {
+    public IdempotencyKey(String key, UUID userId, UUID showId) {
         this.key = key;
         this.userId = userId;
         this.showId = showId;
@@ -45,11 +45,11 @@ public class IdempotencyKey {
         this.key = key;
     }
 
-    public String getUserId() {
+    public UUID getUserId() {
         return userId;
     }
 
-    public void setUserId(String userId) {
+    public void setUserId(UUID userId) {
         this.userId = userId;
     }
 
