@@ -201,9 +201,8 @@ correctness lives.
 
 ## 9. Chosen stack (fill in before generating code)
 
--   Language / framework: `<TBD>`
--   Datastore: PostgreSQL (recommended --- the atomic mechanisms above
-    are cleanest in SQL)
--   Deploy target: `<Render | Fly.io | Railway>`
--   Hold model: `<explicit cancel | time-boxed expiry | both>`
+-   Language / framework: `Spring Boot 4.1.1 / Java 17`
+-   Datastore: PostgreSQL 17
+-   Deploy target: `Render`
+-   Hold model: `time-boxed expiry`
 -   Partial multi-seat policy: all-or-nothing (default)

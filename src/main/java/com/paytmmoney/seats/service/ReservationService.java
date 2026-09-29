@@ -3,6 +3,7 @@ package com.paytmmoney.seats.service;
 import com.paytmmoney.seats.auth.UserContext;
 import com.paytmmoney.seats.dto.ReserveSeatsRequest;
 import com.paytmmoney.seats.dto.ReserveSeatsResponse;
+import com.paytmmoney.seats.dto.ReservationResult;
 import com.paytmmoney.seats.entity.IdempotencyKey;
 import com.paytmmoney.seats.entity.Reservation;
 import com.paytmmoney.seats.entity.ReservationSeat;
@@ -55,7 +56,7 @@ public class ReservationService {
     }
 
     @Transactional
-    public ReserveSeatsResponse reserveSeats(UUID showId, ReserveSeatsRequest request) {
+    public ReservationResult reserveSeats(UUID showId, ReserveSeatsRequest request) {
         UUID userId = UserContext.getUserId();
 
         // Validate show exists
@@ -76,29 +77,32 @@ public class ReservationService {
         // Compute request fingerprint from sorted seat labels
         String fingerprint = computeFingerprint(sortedSeats);
 
-        // Atomic idempotency check - try to insert, relies on UNIQUE constraint
-        IdempotencyKey idempotencyKey = new IdempotencyKey(request.getIdempotencyKey(), userId, showId);
-        idempotencyKey.setRequestFingerprint(fingerprint);
-        try {
-            idempotencyKeyRepository.save(idempotencyKey);
-        } catch (Exception e) {
-            // Unique constraint violation - key already exists
-            IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
-                    request.getIdempotencyKey(), userId, showId);
-            if (existingKey != null) {
-                if (fingerprint.equals(existingKey.getRequestFingerprint())) {
-                    // Same request - return original reservation (idempotent replay)
-                    metrics.incrementDeclinedIdempotentReplay();
+        // Atomic idempotency check - check if key exists first
+        IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
+                request.getIdempotencyKey(), userId, showId);
+        
+        if (existingKey != null) {
+            // Key already exists - check if it's a replay or conflict
+            if (fingerprint.equals(existingKey.getRequestFingerprint())) {
+                // Same request - return original reservation (idempotent replay)
+                if (existingKey.getReservationId() != null) {
                     Reservation existingReservation = reservationRepository.findById(existingKey.getReservationId())
                             .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Reservation not found"));
-                    return buildResponse(existingReservation);
+                    return new ReservationResult(buildResponse(existingReservation), false);
                 } else {
-                    // Different request with same key - conflict
-                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already used with different request");
+                    // Key exists but reservation not yet set - race condition, treat as conflict
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key in use");
                 }
+            } else {
+                // Different request with same key - conflict
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already used with different request");
             }
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Idempotency check failed");
         }
+        
+        // Key doesn't exist - create new idempotency record
+        IdempotencyKey idempotencyKey = new IdempotencyKey(request.getIdempotencyKey(), userId, showId);
+        idempotencyKey.setRequestFingerprint(fingerprint);
+        idempotencyKeyRepository.save(idempotencyKey);
 
         // Per-user limit check - must be inside transaction for concurrency safety
         long currentConfirmedCount = reservationRepository.countConfirmedByUserAndShow(userId, showId);
@@ -147,7 +151,7 @@ public class ReservationService {
 
         metrics.incrementConfirmed();
         updateSeatsAvailableMetric();
-        return buildResponse(savedReservation);
+        return new ReservationResult(buildResponse(savedReservation), true);
     }
 
     private String computeFingerprint(List<String> seats) {
@@ -182,23 +186,6 @@ public class ReservationService {
                 reservation.getStatus().name(),
                 reservation.getCreatedAt()
         );
-    }
-
-    @Transactional
-    public void cancelReservation(UUID reservationId) {
-        UUID userId = UserContext.getUserId();
-
-        Reservation reservation = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
-
-        // Only the owner can cancel
-        if (!reservation.getUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only cancel your own reservations");
-        }
-
-        // Use PostgreSQL function to cancel reservation
-        jdbcTemplate.update("SELECT cancel_reservation(?, ?)", reservationId, userId);
-        updateSeatsAvailableMetric();
     }
 
     private void updateSeatsAvailableMetric() {
