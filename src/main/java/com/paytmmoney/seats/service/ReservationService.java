@@ -6,6 +6,7 @@ import com.paytmmoney.seats.dto.ReserveSeatsResponse;
 import com.paytmmoney.seats.entity.IdempotencyKey;
 import com.paytmmoney.seats.entity.Reservation;
 import com.paytmmoney.seats.entity.ReservationSeat;
+import com.paytmmoney.seats.metrics.ReservationMetrics;
 import com.paytmmoney.seats.repository.IdempotencyKeyRepository;
 import com.paytmmoney.seats.repository.ReservationRepository;
 import com.paytmmoney.seats.repository.ReservationSeatRepository;
@@ -38,16 +39,19 @@ public class ReservationService {
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final ReservationSeatRepository reservationSeatRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final ReservationMetrics metrics;
 
     public ReservationService(ReservationRepository reservationRepository, SeatRepository seatRepository,
                               ShowRepository showRepository, IdempotencyKeyRepository idempotencyKeyRepository,
-                              ReservationSeatRepository reservationSeatRepository, JdbcTemplate jdbcTemplate) {
+                              ReservationSeatRepository reservationSeatRepository, JdbcTemplate jdbcTemplate,
+                              ReservationMetrics metrics) {
         this.reservationRepository = reservationRepository;
         this.seatRepository = seatRepository;
         this.showRepository = showRepository;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.reservationSeatRepository = reservationSeatRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -84,6 +88,7 @@ public class ReservationService {
             if (existingKey != null) {
                 if (fingerprint.equals(existingKey.getRequestFingerprint())) {
                     // Same request - return original reservation (idempotent replay)
+                    metrics.incrementDeclinedIdempotentReplay();
                     Reservation existingReservation = reservationRepository.findById(existingKey.getReservationId())
                             .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Reservation not found"));
                     return buildResponse(existingReservation);
@@ -100,6 +105,7 @@ public class ReservationService {
         long currentHeldCount = reservationRepository.countHeldByUserAndShow(userId, showId);
         long totalCurrent = currentConfirmedCount + currentHeldCount;
         if (totalCurrent + sortedSeats.size() > show.getPerUserLimit()) {
+            metrics.incrementDeclinedPerUserLimit();
             throw new ResponseStatusException(HttpStatus.CONFLICT, "per_user_limit");
         }
 
@@ -125,6 +131,7 @@ public class ReservationService {
 
         if (rowsUpdated == null || rowsUpdated != sortedSeats.size()) {
             // Not all seats were available - rollback entire transaction
+            metrics.incrementDeclinedSeatTaken();
             throw new ResponseStatusException(HttpStatus.CONFLICT, "seat_taken");
         }
 
@@ -138,6 +145,8 @@ public class ReservationService {
         idempotencyKey.setReservationId(savedReservation.getId());
         idempotencyKeyRepository.save(idempotencyKey);
 
+        metrics.incrementConfirmed();
+        updateSeatsAvailableMetric();
         return buildResponse(savedReservation);
     }
 
@@ -189,5 +198,11 @@ public class ReservationService {
 
         // Use PostgreSQL function to cancel reservation
         jdbcTemplate.update("SELECT cancel_reservation(?, ?)", reservationId, userId);
+        updateSeatsAvailableMetric();
+    }
+
+    private void updateSeatsAvailableMetric() {
+        long availableCount = seatRepository.countAvailableSeats();
+        metrics.setSeatsAvailable(availableCount);
     }
 }

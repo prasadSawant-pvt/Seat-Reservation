@@ -33,4 +33,7 @@ public interface SeatRepository extends JpaRepository<Seat, SeatId> {
     int releaseSeat(@Param("showId") UUID showId, @Param("seatLabel") String seatLabel, @Param("userId") UUID userId);
 
     long countById_ShowIdAndStatus(UUID showId, Seat.Status status);
+
+    @Query("SELECT COUNT(s) FROM Seat s WHERE s.status = 'available'")
+    long countAvailableSeats();
 }

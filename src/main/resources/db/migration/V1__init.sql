@@ -108,28 +108,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to cancel a reservation (release seats back to available)
+-- Only cancels held reservations, never confirmed ones
+-- Concurrency-safe: uses conditional UPDATEs
 CREATE OR REPLACE FUNCTION cancel_reservation(
     p_reservation_id UUID,
     p_user_id UUID
 ) RETURNS VOID AS $$
 BEGIN
-    -- Only cancel if the reservation belongs to the user
+    -- Only cancel if the reservation belongs to the user and is held (not confirmed)
     UPDATE reservations
     SET status = 'cancelled'
     WHERE id = p_reservation_id
       AND user_id = p_user_id
-      AND status = 'confirmed';
+      AND status = 'held';
     
-    -- Release associated seats
+    -- Release associated seats - only release held seats, never confirmed ones
+    -- This ensures we never resurrect a seat that has been confirmed
     UPDATE seats
-    SET 
+    SET
         status = 'available',
         held_by = NULL,
         held_until = NULL,
         reservation_id = NULL,
         updated_at = CURRENT_TIMESTAMP
     WHERE reservation_id = p_reservation_id
-      AND status IN ('held', 'confirmed');
+      AND status = 'held';
 END;
 $$ LANGUAGE plpgsql;
 

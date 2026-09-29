@@ -26,6 +26,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/shows").permitAll()
                 .requestMatchers(HttpMethod.GET, "/shows/**").permitAll()
+                .requestMatchers("/auth/token").permitAll()
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic.disable())
