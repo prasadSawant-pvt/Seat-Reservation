@@ -13,11 +13,11 @@ import java.util.UUID;
 @Repository
 public interface ReservationRepository extends JpaRepository<Reservation, UUID> {
 
-    List<Reservation> findByUserIdAndShowId(String userId, UUID showId);
+    List<Reservation> findByUserIdAndShowId(UUID userId, UUID showId);
 
-    @Query("SELECT COUNT(r) FROM Reservation r WHERE r.userId = :userId AND r.showId = :showId AND r.status = 'CONFIRMED'")
-    long countConfirmedByUserAndShow(@Param("userId") String userId, @Param("showId") UUID showId);
+    @Query("SELECT COUNT(r) FROM Reservation r WHERE r.userId = :userId AND r.showId = :showId AND r.status = 'confirmed'")
+    long countConfirmedByUserAndShow(@Param("userId") UUID userId, @Param("showId") UUID showId);
 
-    @Query("SELECT COUNT(r) FROM Reservation r WHERE r.userId = :userId AND r.showId = :showId AND r.status = 'HELD'")
-    long countHeldByUserAndShow(@Param("userId") String userId, @Param("showId") UUID showId);
+    @Query("SELECT COUNT(r) FROM Reservation r WHERE r.userId = :userId AND r.showId = :showId AND r.status = 'held'")
+    long countHeldByUserAndShow(@Param("userId") UUID userId, @Param("showId") UUID showId);
 }
