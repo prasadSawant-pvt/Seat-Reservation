@@ -64,7 +64,8 @@ The application uses the following environment variables (configured automatical
 #### Live URL
 **Live URL: https://seat-reservation-dfr6.onrender.com**
 
-### Burst Testing
+**Important Note for Reviewers:**
+This deployment uses Render's free tier, which spins down the instance after ~15 minutes of inactivity. Cold starts can take 50+ seconds. Since users do not have access to trigger manual deploys, **please test locally using the instructions below** for the best experience. The live instance may be slow or unresponsive due to spin-down.
 
 **On Linux/Mac/Git Bash:**
 ```bash
