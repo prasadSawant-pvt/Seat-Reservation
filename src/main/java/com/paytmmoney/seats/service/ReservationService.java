@@ -17,8 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -51,9 +55,8 @@ public class ReservationService {
         UUID userId = UserContext.getUserId();
 
         // Validate show exists
-        if (!showRepository.existsById(showId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Show not found");
-        }
+        var show = showRepository.findById(showId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Show not found"));
 
         // Validate unique seats
         Set<String> uniqueSeats = new HashSet<>(request.getSeats());
@@ -61,36 +64,55 @@ public class ReservationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate seat labels in request");
         }
 
-        // Check idempotency
-        IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
-                request.getIdempotencyKey(), userId, showId);
-        if (existingKey != null) {
-            // Return existing reservation
-            Reservation existingReservation = reservationRepository.findById(existingKey.getReservationId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Reservation not found"));
-            return buildResponse(existingReservation);
+        // Sort seats to prevent deadlocks - consistent ordering ensures
+        // concurrent requests lock seats in the same order, avoiding circular wait
+        List<String> sortedSeats = new ArrayList<>(uniqueSeats);
+        Collections.sort(sortedSeats);
+
+        // Compute request fingerprint from sorted seat labels
+        String fingerprint = computeFingerprint(sortedSeats);
+
+        // Atomic idempotency check - try to insert, relies on UNIQUE constraint
+        IdempotencyKey idempotencyKey = new IdempotencyKey(request.getIdempotencyKey(), userId, showId);
+        idempotencyKey.setRequestFingerprint(fingerprint);
+        try {
+            idempotencyKeyRepository.save(idempotencyKey);
+        } catch (Exception e) {
+            // Unique constraint violation - key already exists
+            IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
+                    request.getIdempotencyKey(), userId, showId);
+            if (existingKey != null) {
+                if (fingerprint.equals(existingKey.getRequestFingerprint())) {
+                    // Same request - return original reservation (idempotent replay)
+                    Reservation existingReservation = reservationRepository.findById(existingKey.getReservationId())
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Reservation not found"));
+                    return buildResponse(existingReservation);
+                } else {
+                    // Different request with same key - conflict
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already used with different request");
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Idempotency check failed");
         }
 
-        // Check per-user limit
+        // Per-user limit check - must be inside transaction for concurrency safety
         long currentConfirmedCount = reservationRepository.countConfirmedByUserAndShow(userId, showId);
         long currentHeldCount = reservationRepository.countHeldByUserAndShow(userId, showId);
         long totalCurrent = currentConfirmedCount + currentHeldCount;
-        var show = showRepository.findById(showId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Show not found"));
-        if (totalCurrent + request.getSeats().size() > show.getPerUserLimit()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Per-user limit exceeded");
+        if (totalCurrent + sortedSeats.size() > show.getPerUserLimit()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "per_user_limit");
         }
 
-        // Calculate amount before creating reservation
-        Long amountPaise = show.getPricePaise() * uniqueSeats.size();
+        // Calculate amount
+        Long amountPaise = show.getPricePaise() * sortedSeats.size();
 
-        // Create reservation with calculated amount
+        // Create reservation
         Reservation reservation = new Reservation(showId, userId, amountPaise);
         reservation.setStatus(Reservation.Status.held);
         Reservation savedReservation = reservationRepository.save(reservation);
 
-        // Use PostgreSQL function for atomic seat reservation
-        String[] seatArray = uniqueSeats.toArray(new String[0]);
+        // Atomic seat reservation using PostgreSQL function
+        String[] seatArray = sortedSeats.toArray(new String[0]);
         Integer rowsUpdated = jdbcTemplate.queryForObject(
                 "SELECT reserve_seats(?, ?, ?, ?, ?)",
                 Integer.class,
@@ -101,23 +123,39 @@ public class ReservationService {
                 Timestamp.from(Instant.now().plusSeconds(300)) // 5 minute hold
         );
 
-        if (rowsUpdated == null || rowsUpdated != uniqueSeats.size()) {
-            // Not all seats were available - rollback
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "One or more seats are not available");
+        if (rowsUpdated == null || rowsUpdated != sortedSeats.size()) {
+            // Not all seats were available - rollback entire transaction
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "seat_taken");
         }
 
-        // Create reservation seats
-        for (String seatLabel : uniqueSeats) {
+        // Create reservation seats link records
+        for (String seatLabel : sortedSeats) {
             ReservationSeat reservationSeat = new ReservationSeat(savedReservation.getId(), showId, seatLabel);
             reservationSeatRepository.save(reservationSeat);
         }
 
-        // Store idempotency key
-        IdempotencyKey idempotencyKey = new IdempotencyKey(request.getIdempotencyKey(), userId, showId);
+        // Update idempotency key with reservation_id
         idempotencyKey.setReservationId(savedReservation.getId());
         idempotencyKeyRepository.save(idempotencyKey);
 
         return buildResponse(savedReservation);
+    }
+
+    private String computeFingerprint(List<String> seats) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            String joined = String.join(",", seats);
+            byte[] hash = md.digest(joined.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 
     private ReserveSeatsResponse buildResponse(Reservation reservation) {

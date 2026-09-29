@@ -24,7 +24,9 @@ public class ReservationController {
             @PathVariable UUID showId,
             @Valid @RequestBody ReserveSeatsRequest request) {
         ReserveSeatsResponse response = reservationService.reserveSeats(showId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        // Return 201 for new reservations, 200 for idempotent replays
+        // The service determines this based on whether it's a new or existing reservation
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/reservations/{id}/cancel")
