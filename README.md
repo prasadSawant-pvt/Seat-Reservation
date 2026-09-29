@@ -189,7 +189,7 @@ Response:
 }
 ```
 
-### 5. Health Checks
+### 5. Health Checks & Monitoring
 
 ```bash
 # Liveness (always 200 if process is up)
@@ -198,9 +198,68 @@ curl http://localhost:8080/actuator/health/liveness
 # Readiness (checks DB connectivity)
 curl http://localhost:8080/actuator/health/readiness
 
-# Prometheus metrics
+# General health (includes all health indicators)
+curl http://localhost:8080/actuator/health
+
+# Application info
+curl http://localhost:8080/actuator/info
+
+# Prometheus metrics (for observability)
 curl http://localhost:8080/actuator/prometheus
 ```
+
+**Available Metrics:**
+- `seats_available`: Current count of available seats across all shows
+- `reservation_confirmed_total`: Total number of confirmed reservations
+- `reservation_declined_total`: Total number of declined reservations (by reason)
+- `reservation_declined_seat_taken_total`: Declined due to seat already taken
+- `reservation_declined_per_user_limit_total`: Declined due to per-user limit exceeded
+- `reservation_declined_idempotent_replay_total`: Idempotent replays (not new reservations)
+
+## API Reference
+
+### Public Endpoints (No Authentication Required)
+
+| Method | Path | Description | Response Codes |
+|--------|------|-------------|----------------|
+| POST | `/auth/token` | Generate JWT token for a user | 200 (success), 400 (invalid user_id) |
+| POST | `/shows` | Create a new show | 201 (created), 400 (validation error) |
+| GET | `/shows/{id}` | Get show state with seat availability | 200 (success), 404 (not found) |
+| GET | `/actuator/health/liveness` | Liveness probe | 200 (healthy) |
+| GET | `/actuator/health/readiness` | Readiness probe (checks DB) | 200 (ready), 503 (not ready) |
+| GET | `/actuator/health` | General health status | 200 (healthy), 503 (unhealthy) |
+| GET | `/actuator/info` | Application information | 200 (success) |
+| GET | `/actuator/prometheus` | Prometheus metrics | 200 (success) |
+
+### Protected Endpoints (JWT Token Required)
+
+| Method | Path | Description | Response Codes |
+|--------|------|-------------|----------------|
+| POST | `/shows/{showId}/reserve` | Reserve seats for a show | 201 (new reservation), 200 (idempotent replay), 400 (validation error), 401 (unauthorized), 404 (show not found), 409 (seat taken / per-user limit / idempotency conflict) |
+
+**Authentication Header:**
+```
+Authorization: Bearer {jwt_token}
+```
+
+### Error Response Format
+
+All error responses follow this format:
+```json
+{
+  "error": "error_type",
+  "message": "Human readable error message"
+}
+```
+
+**Common Error Types:**
+- `seat_taken`: Requested seat is already held or confirmed
+- `per_user_limit`: User has exceeded the per-user seat limit
+- `Idempotency key already used with different request`: Same idempotency key used with different seat selection
+- `user_id is required`: Missing user_id in auth token request
+- `Invalid user_id format`: user_id is not a valid UUID
+- `Show not found`: Show ID does not exist
+- `Reservation not found`: Reservation ID does not exist
 
 ### 6. 20k Concurrent Load Test
 
