@@ -9,6 +9,14 @@ Seat Reservation at Scale handling 20k Requests
 - Docker
 
 ### Setup
+**One-command setup with Docker Compose:**
+```bash
+docker compose up
+```
+
+This will start both PostgreSQL and the Spring Boot application. The app will be available at http://localhost:8080.
+
+**Alternative: Manual setup**
 1. Start PostgreSQL:
 ```bash
 docker-compose up -d

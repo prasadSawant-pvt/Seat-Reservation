@@ -13,8 +13,10 @@ import com.paytmmoney.seats.repository.ReservationRepository;
 import com.paytmmoney.seats.repository.ReservationSeatRepository;
 import com.paytmmoney.seats.repository.SeatRepository;
 import com.paytmmoney.seats.repository.ShowRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -41,11 +43,12 @@ public class ReservationService {
     private final ReservationSeatRepository reservationSeatRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ReservationMetrics metrics;
+    private final IdempotencyKeyWriter idempotencyKeyWriter;
 
     public ReservationService(ReservationRepository reservationRepository, SeatRepository seatRepository,
                               ShowRepository showRepository, IdempotencyKeyRepository idempotencyKeyRepository,
                               ReservationSeatRepository reservationSeatRepository, JdbcTemplate jdbcTemplate,
-                              ReservationMetrics metrics) {
+                              ReservationMetrics metrics, IdempotencyKeyWriter idempotencyKeyWriter) {
         this.reservationRepository = reservationRepository;
         this.seatRepository = seatRepository;
         this.showRepository = showRepository;
@@ -53,6 +56,7 @@ public class ReservationService {
         this.reservationSeatRepository = reservationSeatRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.metrics = metrics;
+        this.idempotencyKeyWriter = idempotencyKeyWriter;
     }
 
     @Transactional
@@ -77,17 +81,26 @@ public class ReservationService {
         // Compute request fingerprint from sorted seat labels
         String fingerprint = computeFingerprint(sortedSeats);
 
-        // Atomic idempotency check - check if key exists first
-        IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
-                request.getIdempotencyKey(), userId, showId);
-        
-        if (existingKey != null) {
+        // Atomic idempotency check - try insert first, handle conflict on constraint violation
+        IdempotencyKey idempotencyKey;
+        try {
+            idempotencyKey = idempotencyKeyWriter.attemptInsert(request.getIdempotencyKey(), userId, showId, fingerprint);
+        } catch (DataIntegrityViolationException e) {
+            // Constraint violation - key already exists, re-fetch and handle
+            IdempotencyKey existingKey = idempotencyKeyRepository.findByKeyAndUserIdAndShowId(
+                    request.getIdempotencyKey(), userId, showId);
+            
+            if (existingKey == null) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Idempotency key conflict but not found");
+            }
+            
             // Key already exists - check if it's a replay or conflict
             if (fingerprint.equals(existingKey.getRequestFingerprint())) {
                 // Same request - return original reservation (idempotent replay)
                 if (existingKey.getReservationId() != null) {
                     Reservation existingReservation = reservationRepository.findById(existingKey.getReservationId())
                             .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Reservation not found"));
+                    metrics.incrementDeclinedIdempotentReplay();
                     return new ReservationResult(buildResponse(existingReservation), false);
                 } else {
                     // Key exists but reservation not yet set - race condition, treat as conflict
@@ -98,13 +111,16 @@ public class ReservationService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already used with different request");
             }
         }
-        
-        // Key doesn't exist - create new idempotency record
-        IdempotencyKey idempotencyKey = new IdempotencyKey(request.getIdempotencyKey(), userId, showId);
-        idempotencyKey.setRequestFingerprint(fingerprint);
-        idempotencyKeyRepository.save(idempotencyKey);
 
         // Per-user limit check - must be inside transaction for concurrency safety
+        // Acquire advisory lock on (user_id, show_id) to serialize concurrent requests from same user
+        long lockKey = userId.hashCode() ^ showId.hashCode();
+        jdbcTemplate.execute("SELECT pg_advisory_xact_lock(?)", (PreparedStatementCallback<Void>) ps -> {
+            ps.setLong(1, lockKey);
+            ps.execute();
+            return null;
+        });
+        
         long currentConfirmedCount = reservationRepository.countConfirmedByUserAndShow(userId, showId);
         long currentHeldCount = reservationRepository.countHeldByUserAndShow(userId, showId);
         long totalCurrent = currentConfirmedCount + currentHeldCount;
