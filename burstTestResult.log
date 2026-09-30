@@ -1,0 +1,42 @@
+PS D:\Spring Projects\Seat-Reservation> .\burst.ps1 http://localhost:8080
+==========================================
+Seat Reservation Burst Test                                                                                                                                                       ==========================================                                                                                                                                        Base URL: http://localhost:8080                                                                                                                                                   Users: 20
+Seats: 100
+Concurrent requests: 50
+==========================================
+                                                                                                                                                                                  Checking health endpoint...                                                                                                                                                       Server is healthy
+Creating show...
+Show created with ID: ababd668-25a1-405d-bc4d-52f6f2ae0082
+
+Generating user tokens...
+Generated 20 user tokens
+
+==========================================
+Test 1: Normal Concurrent Reservations
+==========================================
+Confirmed: 50
+Declined (seat_taken): 0
+Declined (per_user_limit): 0
+Declined (idempotent): 0
+Server errors (5xx): 0
+
+==========================================
+Test 2: Hot-Seat Storm (Many Users, One Seat)
+==========================================
+Hot-seat confirmed: 1
+Hot-seat declined: 49
+Hot-seat errors (5xx): 0
+
+==========================================
+Final Reconciliation
+==========================================
+Available: 49
+Held: 51
+Confirmed: 0
+Total: 100
+Invariant holds: available + held + confirmed == total
+
+==========================================
+Burst Test Complete
+==========================================
+PS D:\Spring Projects\Seat-Reservation>
